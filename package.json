@@ -5,7 +5,7 @@
   "description": "TypeDoc plugin for rendering Mermaid diagrams",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/boneskull/typedoc-plugin-mermaid.git"
+    "url": "git+https://github.com/boneskull/typedoc-plugin-mermaid2.git"
   },
   "author": "Christopher Hiller <boneskull@boneskull.com> (https://boneskull.com/)",
   "license": "BlueOak-1.0.0",

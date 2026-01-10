@@ -25,6 +25,7 @@
     "coverage",
     "dist",
     "docs",
+    "examples",
     "node_modules",
     "worktrees",
     ".git"
@@ -42,5 +43,5 @@
     "huskyrc",
     "commitlintrc"
   ],
-  "words": ["shankle", "picanha", "bupkis", "andouille"]
+  "words": ["bupkis", "gantt", "kamiazya", "mermaid", "typedoc", "unpkg"]
 }

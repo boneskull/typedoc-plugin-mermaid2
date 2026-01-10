@@ -1,0 +1,9 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./src/index.ts"],
+  "ignoredHighlightLanguages": ["mermaid"],
+  "name": "Mermaid Plugin Example",
+  "out": "./docs",
+  "plugin": ["../dist/index.js"],
+  "tsconfig": "./tsconfig.json"
+}

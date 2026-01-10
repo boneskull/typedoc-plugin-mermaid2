@@ -1,15 +1,14 @@
 {
-  "name": "packagename",
+  "name": "@boneskull/typedoc-plugin-mermaid",
   "version": "0.0.0",
   "type": "module",
-  "description": "Shankle short loin porchetta strip steak tongue drumstick shoulder shank turkey pork loin picanha flank.",
+  "description": "TypeDoc plugin for rendering Mermaid diagrams",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/boneskull/packagename.git"
+    "url": "git+https://github.com/boneskull/typedoc-plugin-mermaid.git"
   },
   "author": "Christopher Hiller <boneskull@boneskull.com> (https://boneskull.com/)",
   "license": "BlueOak-1.0.0",
-  "private": true,
   "engines": {
     "node": ">=22.0.0"
   },
@@ -27,7 +26,13 @@
   "files": [
     "dist"
   ],
-  "keywords": [],
+  "keywords": [
+    "diagrams",
+    "documentation",
+    "mermaid",
+    "typedoc",
+    "typedoc-plugin"
+  ],
   "scripts": {
     "build": "zshy",
     "commitlint": "commitlint",
@@ -48,6 +53,9 @@
     "test": "run-s test:runtime",
     "test:runtime": "node --import tsx --test --test-reporter=spec \"test/**/*.test.ts\"",
     "test:watch": "node --import tsx --test --test-reporter=spec --watch \"test/**/*.test.ts\""
+  },
+  "peerDependencies": {
+    "typedoc": ">=0.27.0"
   },
   "devDependencies": {
     "@commitlint/cli": "20.2.0",
@@ -72,9 +80,13 @@
     "prettier-plugin-pkg": "0.21.2",
     "prettier-plugin-sort-json": "4.1.1",
     "tsx": "4.21.0",
+    "typedoc": "0.28.15",
     "typescript": "5.9.3",
     "typescript-eslint": "8.51.0",
     "zshy": "0.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "knip": {
     "ignoreDependencies": [
@@ -82,7 +94,8 @@
     ],
     "ignore": [
       "**/*.d.ts",
-      ".worktrees/**/*"
+      ".worktrees/**/*",
+      "examples/**/*"
     ],
     "tags": [
       "-knipignore"

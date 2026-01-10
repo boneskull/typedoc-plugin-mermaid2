@@ -129,6 +129,7 @@ export default defineConfig(
       '**/docs/**',
       '**/dist/**',
       'coverage',
+      'examples/**',
       '**/*.snapshot',
       '**/.tmp/**/*',
       '.worktrees/**/*',

@@ -24,7 +24,9 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "CHANGELOG.md",
+    "dist",
+    "src"
   ],
   "keywords": [
     "diagrams",
@@ -78,7 +80,6 @@
     "prettier": "3.7.4",
     "prettier-plugin-jsdoc": "1.8.0",
     "prettier-plugin-pkg": "0.21.2",
-    "prettier-plugin-sort-json": "4.1.1",
     "tsx": "4.21.0",
     "typedoc": "0.28.15",
     "typescript": "5.9.3",
@@ -123,8 +124,7 @@
     "jsdocPreferCodeFences": true,
     "plugins": [
       "prettier-plugin-jsdoc",
-      "prettier-plugin-pkg",
-      "prettier-plugin-sort-json"
+      "prettier-plugin-pkg"
     ],
     "singleQuote": true,
     "tsdoc": true

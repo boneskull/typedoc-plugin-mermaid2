@@ -4,77 +4,114 @@ This file provides guidance to AI agents (Claude Code, Cursor, Copilot, etc.) wh
 
 ## What This Is
 
-**boneskull-template** is a comprehensive GitHub template for creating modern Node.js TypeScript libraries. It's a fully-configured development environment with quality enforcement, automation, and best practices pre-configured.
+**@boneskull/typedoc-plugin-mermaid** is a TypeDoc plugin that transforms Mermaid code blocks in documentation comments into rendered diagrams.
 
-**Purpose**: Bootstrap new Node.js packages with all tooling, testing, linting, CI/CD, and publishing workflows ready to use.
+**Purpose**: Enable developers to embed Mermaid diagrams (flowcharts, sequence diagrams, state machines, ER diagrams, etc.) directly in their TSDoc/JSDoc comments, rendered beautifully in TypeDoc's HTML output.
 
 **Key Features**:
 
-- ESLint v9+ flat config with TypeScript support
-- Native Node.js test runner (`node:test`) with `bupkis` assertions
-- Dual-module builds (ESM + CommonJS) via `zshy`
-- Strict TypeScript with pragmatic exceptions
-- Automated releases (release-please) and dependency updates (Renovate)
-- Git hooks via Husky for quality gates
-- Zero production dependencies
+- Transforms ` ```mermaid ` code blocks into rendered SVG diagrams
+- Automatic dark/light theme switching based on TypeDoc's theme
+- Two loading modes: CDN (default) or local (offline/air-gapped)
+- Graceful fallback to plain code when JavaScript is disabled
+- Client-side rendering via Mermaid library
 
 ## Quick Start
 
 ```bash
-# Use as GitHub template, then:
-npm install              # Install dependencies (runs husky + build)
+npm install              # Install dependencies
+npm run build            # Build ESM output via zshy
 npm test                 # Run tests with node:test
 npm run test:watch       # TDD watch mode
-npm run build            # Build ESM + CJS via zshy
-npm run lint             # Check all linters (parallel)
-npm run fix              # Auto-fix all issues (sequential)
+npm run lint             # Check all linters
+npm run fix              # Auto-fix issues
 ```
 
-## Essential Commands
+### Testing the Plugin
 
 ```bash
-# Development
-npm run lint:eslint      # ESLint (code quality)
-npm run lint:types       # TypeScript type checking
-npm run lint:prettier    # Format checking
-npm run lint:spelling    # Spell check (cspell)
-npm run lint:knip        # Find unused dependencies
-npm run lint:markdown    # Markdown linting
+# Build the plugin first
+npm run build
 
-# Git workflow
-npm run commitlint       # Validate commit message
-npm run lint:staged      # Run on staged files (pre-commit hook)
+# Generate example docs (from project root)
+cd examples && npx typedoc
+# Open examples/docs/index.html to see rendered diagrams
 ```
 
 ## Project Structure
 
 ```text
-boneskull-template/
-├── src/index.ts         # Main entry point (currently empty - blank slate)
-├── test/                # Tests (*.test.ts pattern)
-├── dist/                # Build output: index.js (ESM), index.cjs (CJS), *.d.ts/*.d.cts
-├── .github/
-│   ├── workflows/       # CI: lint, test (Node 20/22/24), release-please
-│   └── actions/         # Reusable: prepare (setup), publish (npm)
-├── .husky/              # Git hooks: pre-commit (lint-staged), commit-msg (commitlint)
-├── eslint.config.js     # ESLint v9+ flat config
-├── tsconfig.json        # TypeScript strict mode config
-└── package.json         # Scripts, deps, embedded configs (prettier, lint-staged, zshy, knip)
+typedoc-plugin-mermaid/
+├── src/index.ts         # Complete plugin implementation (single file)
+├── test/index.test.ts   # Unit tests for all exported functions
+├── dist/                # Build output: index.js (ESM), index.d.ts
+├── examples/            # Example project demonstrating the plugin
+│   ├── src/index.ts     # Source with Mermaid diagrams in TSDoc
+│   ├── typedoc.json     # TypeDoc config using ../dist/index.js
+│   └── docs/            # Generated documentation output (gitignored)
+├── .github/workflows/   # CI: lint, test (Node 22/24), release-please
+└── package.json         # Note: ESM-only (no CJS), peer deps on typedoc/mermaid
 ```
 
-## Key Patterns
+## How the Plugin Works
 
-### Testing (node:test + bupkis)
+The plugin hooks into TypeDoc's rendering pipeline:
+
+1. **`Renderer.EVENT_BEGIN`**: Validates configuration; if `mermaidSource: "local"`, resolves mermaid's dist path early
+2. **`Renderer.EVENT_END_PAGE`**: For each HTML page:
+   - Finds `<pre><code class="mermaid">` blocks
+   - Transforms them into dual dark/light `<div class="mermaid">` blocks
+   - Injects CSS for theme switching and fallback handling
+   - Injects ES module script to initialize Mermaid
+3. **`postRenderAsyncJobs`**: If local mode, copies mermaid ESM files to `assets/mermaid/`
+
+### Key Design Decisions
+
+**Dual diagrams for theming**: Each mermaid block becomes two `<div>`s (dark + light themed), with CSS toggling visibility based on TypeDoc's `data-theme` attribute. This ensures diagrams match the documentation theme.
+
+**ESM-only loading**: Both CDN and local modes use ES module imports (`import mermaid from "..."`). Local mode preserves mermaid's lazy-loaded chunks directory for efficient loading.
+
+**Client-side rendering**: Diagrams render in the browser, not at build time. This keeps the plugin simple and avoids puppeteer/playwright dependencies.
+
+## Plugin Configuration
+
+Two options declared via TypeDoc's `app.options.addDeclaration()`:
+
+| Option          | Type                 | Default   | Description                           |
+| --------------- | -------------------- | --------- | ------------------------------------- |
+| `mermaidSource` | `"cdn"` \| `"local"` | `"cdn"`   | Where to load Mermaid from            |
+| `mermaidCdnUrl` | `string`             | unpkg URL | CDN URL (only when source is `"cdn"`) |
+
+## Key Functions
+
+All implementation is in `src/index.ts`:
+
+| Function                                | Purpose                                                    |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `load(app)`                             | TypeDoc plugin entry point; registers options and handlers |
+| `processMermaidPage(html, options)`     | Main transformation: finds blocks, injects styles/scripts  |
+| `transformMermaidBlocks(html)`          | Regex replacement of `<pre><code class="mermaid">` blocks  |
+| `toMermaidBlock(escapedCode)`           | Creates dark/light div structure with fallback             |
+| `getScript(options)`                    | Generates the ES module script for mermaid init            |
+| `resolveMermaidDistPath()`              | Finds mermaid in node_modules for local mode               |
+| `getRelativeAssetPath(pageUrl)`         | Calculates `../` depth for nested pages                    |
+| `escapeHtml(str)` / `unescapeHtml(str)` | HTML entity handling for mermaid syntax                    |
+
+## Testing Patterns
+
+Tests use `node:test` + `bupkis`. Each exported function has focused unit tests:
 
 ```typescript
-import { describe, it } from 'node:test';
 import { expect } from 'bupkis';
+import { describe, it } from 'node:test';
 
-describe('feature name', () => {
-  it('should do something', () => {
-    expect(value, 'to equal', expected);
-    expect(obj, 'to have property', 'key');
-    expect(result, 'to satisfy', { key: value });
+describe('transformMermaidBlocks', () => {
+  it('should transform TypeDoc mermaid code blocks', () => {
+    const input =
+      '<pre><code class="mermaid">graph TD</code><button>Copy</button></pre>';
+    const result = transformMermaidBlocks(input);
+
+    expect(result, 'to contain', '<div class="mermaid-block">');
   });
 });
 ```
@@ -82,165 +119,79 @@ describe('feature name', () => {
 **Test files**: `test/**/*.test.ts` pattern
 **Run with**: `npm test` or `npm run test:watch`
 
-### Conventional Commits (Required)
+## Common Pitfalls
+
+1. **TypeDoc version mismatch**: Plugin requires TypeDoc 0.27+ (uses different Renderer API than 0.26 and earlier)
+2. **Mermaid not found in local mode**: Must install mermaid as dev dependency: `npm install mermaid -D`
+3. **"mermaid" highlight warning**: Add `"ignoredHighlightLanguages": ["mermaid"]` to typedoc.json
+4. **Diagrams not rendering**: Check browser console; common issues are CSP blocking CDN or malformed mermaid syntax
+5. **Theme not switching**: Ensure TypeDoc theme toggle is working; plugin observes `data-theme` attribute changes
+6. **ESM entry point missing**: Requires mermaid >= 11.0.0 for ESM bundle with chunks
+
+## Code Style
+
+- Semicolons required, single quotes, 2-space indentation
+- Arrow functions for callbacks
+- Inline type imports: `import { type Foo } from 'bar'`
+- Unused variables start with `_`
+- Docstrings on all exported functions
+
+## Conventional Commits
 
 ```bash
 feat: add new feature        # Minor version bump
 fix: resolve bug             # Patch version bump
 chore: update dependencies   # No version bump
 docs: update README          # No version bump
-
-# For breaking changes:
-feat!: major API change
-
-BREAKING CHANGE: Description in footer
 ```
 
-**Note**: Formatting rules are relaxed (no max line lengths, flexible subject casing). Focus on semantic type.
+## Dependencies
 
-### Adding Source Code
+**Peer dependencies** (user must install):
 
-1. Create TypeScript file in `src/`
-2. Export from `src/index.ts`
-3. Build: `npm run build`
-4. Test: `npm test`
+- `typedoc` >= 0.27.0
+- `mermaid` >= 11.0.0 (optional, required for local mode)
 
-Output appears in `dist/`:
+**Dev dependencies** include:
 
-- `index.js` (ESM)
-- `index.cjs` (CommonJS)
-- `index.d.ts` + `index.d.cts` (type declarations)
+- `typedoc` and `mermaid` for development/testing
+- `bupkis` for assertions
+- `zshy` for ESM-only builds
+- Standard linting stack (eslint, prettier, cspell, etc.)
 
-### Code Style (Enforced)
+## TypeDoc Plugin API Reference
 
-- ✅ Semicolons required
-- ✅ Single quotes
-- ✅ 2-space indentation
-- ✅ Arrow functions for callbacks
-- ✅ Function expressions over declarations
-- ✅ Inline type imports: `import { type Foo } from 'bar'`
-- ✅ Unused variables start with `_`
+Key TypeDoc types used:
 
-**TypeScript Pragmatism**:
+```typescript
+import {
+  type Application,      // Main TypeDoc app, passed to load()
+  type PageEvent,        // Event data for page rendering
+  ParameterType,         // For option declarations (Map, String, etc.)
+  Renderer,              // Renderer.EVENT_* constants
+} from 'typedoc';
 
-- `any` allowed (sometimes necessary)
-- Non-null assertions (`!`) allowed
-- Test files have relaxed rules (no unsafe assignment warnings)
-
-## Important Context
-
-### Why These Tools?
-
-**zshy instead of Vite/esbuild**: Purpose-built for dual-module (ESM + CJS) npm packages with TypeScript. Generates both `.js`/`.cjs` and `.d.ts`/`.d.cts` from single source.
-
-**node:test instead of Jest/Mocha**: Zero external test framework dependency. Built into Node.js 20+. Fast, simple, actively maintained by Node.js core team.
-
-**Blue Oak License**: Modern permissive license (similar to MIT/Apache 2.0) with clearer language and explicit patent grant.
-
-**Exact version pinning** (`.npmrc` has `save-exact=true`): Reproducible builds. Renovate Bot handles updates via automated PRs with CI testing.
-
-**Relaxed commitlint rules**: Focus on semantic commit type (feat/fix/chore) rather than pedantic formatting. Makes commits easier to write while maintaining automation benefits.
-
-### Git Hooks Strategy
-
-**Pre-commit** (`.husky/pre-commit`): Runs `lint-staged` on only changed files (fast feedback)
-**Commit-msg** (`.husky/commit-msg`): Validates conventional commit format
-
-**lint-staged** runs per file type:
-
-- `.ts/.js/.yml/.json5`: eslint → prettier → cspell
-- `.json` (except package-lock): eslint → prettier → cspell
-- `.md`: markdownlint → prettier → cspell
-
-### Release Workflow
-
-1. Develop on feature branch
-2. Open PR (CI runs lint + test)
-3. Merge to `main`
-4. Release-please bot creates/updates "Release PR"
-5. Merge Release PR → Creates GitHub release + git tag
-6. **(Optional)** Publishes to npm (currently disabled in `.github/workflows/release.yml`)
-
-To enable npm publishing: Add `NPM_TOKEN` to GitHub secrets and uncomment publish step in `release.yml`.
-
-### TypeScript Configuration
-
-**Strict mode enabled** with extra checks:
-
-- `noUncheckedIndexedAccess: true` - Prevents `array[i]` bugs
-- `noUncheckedSideEffectImports: true` - Import safety
-- `module: "nodenext"` - Hybrid ESM/CJS support
-- `verbatimModuleSyntax: false` - Allows type erasure
-
-**Test files** (`test/**/*.test.ts`) have relaxed rules:
-
-- `no-floating-promises: off`
-- `no-unsafe-assignment: off`
-- `no-unsafe-member-access: off`
-
-### ESLint v9+ Flat Config
-
-**Key points**:
-
-- Uses new flat config format (not `.eslintrc`)
-- Type-aware linting (uses `tsconfig.json`)
-- Multiple plugins: typescript-eslint, stylistic, perfectionist, jsonc
-- Different rules for test files vs source files
-- Ignores: `docs/`, `dist/`, `coverage/`, `node_modules/`, `worktrees/`
-
-### Common Pitfalls
-
-1. **Commit rejected**: Use conventional commit format: `type: message`
-2. **Tests not found**: File must match `test/**/*.test.ts` pattern (not `.spec.ts`)
-3. **Module resolution errors**: TypeScript uses `module: "nodenext"` - may need `.js` extensions in imports
-4. **Build before publishing**: Run `npm run build` before `npm pack` - dist output is gitignored but included in npm package
-5. **ESLint type errors**: Ensure `tsconfig.json` includes the file; run `npm run lint:types` first
-
-### Maintenance
-
-**Automated** (via Renovate):
-
-- Dependency updates (auto-merge minor/patch)
-- Lock file maintenance
-- Security vulnerability fixes
-
-**Manual review required**:
-
-- Major version updates
-- Breaking changes
-
-**Health checks**:
-
-```bash
-npm run lint:knip        # Find unused dependencies
-npm audit                # Security vulnerabilities
-npm outdated             # Check for updates
+// Plugin entry point signature
+export const load = (app: Application): void => { ... };
 ```
 
 ## Quick Reference
 
-| Task        | Command                 |
-| ----------- | ----------------------- |
-| Install     | `npm install`           |
-| Test        | `npm test`              |
-| TDD         | `npm run test:watch`    |
-| Build       | `npm run build`         |
-| Lint        | `npm run lint`          |
-| Fix         | `npm run fix`           |
-| Type check  | `npm run lint:types`    |
-| Spell check | `npm run lint:spelling` |
-
-| Issue           | Solution                            |
-| --------------- | ----------------------------------- |
-| Commit rejected | Use `type: message` format          |
-| ESLint errors   | Run `npm run fix:eslint`            |
-| Type errors     | Check `tsconfig.json` includes file |
-| Test not found  | Must be `*.test.ts` in `test/`      |
+| Task         | Command                      |
+| ------------ | ---------------------------- |
+| Build        | `npm run build`              |
+| Test         | `npm test`                   |
+| TDD          | `npm run test:watch`         |
+| Lint         | `npm run lint`               |
+| Fix          | `npm run fix`                |
+| Type check   | `npm run lint:types`         |
+| Example docs | `cd examples && npx typedoc` |
 
 ## Resources
 
-- **Node.js test runner**: https://nodejs.org/docs/latest/api/test.html
+- **TypeDoc Plugin Development**: https://typedoc.org/guides/development/plugins/
+- **Mermaid Documentation**: https://mermaid.js.org/intro/
+- **TypeDoc Renderer API**: https://typedoc.org/api/classes/Renderer.html
+- **Original plugin (inspiration)**: https://github.com/kamiazya/typedoc-plugin-mermaid
 - **bupkis assertions**: https://github.com/boneskull/bupkis
-- **ESLint flat config**: https://eslint.org/docs/latest/use/configure/configuration-files
-- **Conventional Commits**: https://www.conventionalcommits.org/
-- **Template author**: Christopher Hiller (boneskull@boneskull.com)
+- **Author**: Christopher Hiller (boneskull@boneskull.com)

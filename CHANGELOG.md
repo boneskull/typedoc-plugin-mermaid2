@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/boneskull/typedoc-plugin-mermaid2/compare/typedoc-plugin-mermaid-v0.1.1...typedoc-plugin-mermaid-v0.2.0) (2026-01-18)
+
+
+### Features
+
+* add mermaidCdnUrl option for customizing CDN ([597183b](https://github.com/boneskull/typedoc-plugin-mermaid2/commit/597183ba37cd20989bb61ee75aa3cd770047d73c))
+* add mermaidSource option for local mermaid loading ([#4](https://github.com/boneskull/typedoc-plugin-mermaid2/issues/4)) ([f5a3b57](https://github.com/boneskull/typedoc-plugin-mermaid2/commit/f5a3b57a4991df43fdf83e9c4f161c3387d84723))
+
 ## [0.1.1](https://github.com/boneskull/typedoc-plugin-mermaid2/compare/typedoc-plugin-mermaid-v0.1.0...typedoc-plugin-mermaid-v0.1.1) (2026-01-18)
 
 

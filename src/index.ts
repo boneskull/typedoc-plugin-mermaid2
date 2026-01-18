@@ -79,11 +79,18 @@ export const resolveMermaidDistPath = (): MermaidResolutionResult => {
   // Verify the ESM entry point exists (sanity check)
   try {
     require.resolve(esmEntry);
-  } catch {
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'MODULE_NOT_FOUND' || code === 'ERR_MODULE_NOT_FOUND') {
+      return {
+        error:
+          `mermaid package found but ESM entry point missing at ${esmEntry}. ` +
+          'Ensure you have mermaid >= 11.0.0 installed.',
+        ok: false,
+      };
+    }
     return {
-      error:
-        `mermaid package found but ESM entry point missing at ${esmEntry}. ` +
-        'Ensure you have mermaid >= 11.0.0 installed.',
+      error: `Failed to verify mermaid ESM entry point at ${esmEntry}: ${err}`,
       ok: false,
     };
   }
@@ -358,7 +365,7 @@ export const load = (app: Application): void => {
   // Declare the mermaidSource option
   app.options.addDeclaration({
     defaultValue: 'cdn',
-    help: 'Where to load Mermaid from: "cdn" uses mermaidCdnUrl, "local" copies from node_modules',
+    help: 'Where to load Mermaid from: cdn uses mermaidCdnUrl, local copies from node_modules',
     map: new Map([
       ['cdn', 'cdn'],
       ['local', 'local'],
@@ -383,12 +390,17 @@ export const load = (app: Application): void => {
 
   // Validate mermaid availability early when rendering starts
   app.renderer.on(Renderer.EVENT_BEGIN, () => {
+    // Reset state for each render cycle (important if render is called multiple times)
+    needsMermaidCopy = false;
+    mermaidResolution = undefined;
+
     const source = app.options.getValue('mermaidSource') as MermaidSource;
 
     if (source === 'local') {
       mermaidResolution = resolveMermaidDistPath();
       if (!mermaidResolution.ok) {
-        app.logger.error(`[typedoc-plugin-mermaid] ${mermaidResolution.error}`);
+        // Throw error to fail the build - continuing would produce broken docs
+        throw new Error(`[typedoc-plugin-mermaid] ${mermaidResolution.error}`);
       }
     }
   });

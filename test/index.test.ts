@@ -4,11 +4,35 @@ import { describe, it } from 'node:test';
 import {
   DEFAULT_CDN_URL,
   escapeHtml,
+  getRelativeAssetPath,
+  getScript,
+  type MermaidScriptOptions,
   processMermaidPage,
+  resolveMermaidDistPath,
   toMermaidBlock,
   transformMermaidBlocks,
   unescapeHtml,
 } from '../src/index.js';
+
+/**
+ * Helper to create default CDN options for tests.
+ */
+const cdnOptions = (cdnUrl = DEFAULT_CDN_URL): MermaidScriptOptions => ({
+  cdnUrl,
+  localPath: './assets/mermaid/mermaid.esm.min.mjs',
+  source: 'cdn',
+});
+
+/**
+ * Helper to create local options for tests.
+ */
+const localOptions = (
+  localPath = './assets/mermaid/mermaid.esm.min.mjs',
+): MermaidScriptOptions => ({
+  cdnUrl: DEFAULT_CDN_URL,
+  localPath,
+  source: 'local',
+});
 
 describe('escapeHtml', () => {
   it('should escape ampersands', () => {
@@ -134,6 +158,79 @@ describe('transformMermaidBlocks', () => {
   });
 });
 
+describe('getRelativeAssetPath', () => {
+  it('should return ./ prefix for root-level pages', () => {
+    expect(
+      getRelativeAssetPath('index.html'),
+      'to equal',
+      './assets/mermaid/mermaid.esm.min.mjs',
+    );
+  });
+
+  it('should return ../ prefix for one-level deep pages', () => {
+    expect(
+      getRelativeAssetPath('classes/Foo.html'),
+      'to equal',
+      '../assets/mermaid/mermaid.esm.min.mjs',
+    );
+  });
+
+  it('should return multiple ../ for deeply nested pages', () => {
+    expect(
+      getRelativeAssetPath('modules/foo/bar/Baz.html'),
+      'to equal',
+      '../../../assets/mermaid/mermaid.esm.min.mjs',
+    );
+  });
+});
+
+describe('getScript', () => {
+  it('should generate ESM module script for CDN mode', () => {
+    const result = getScript(cdnOptions());
+
+    expect(result, 'to contain', '<script type="module">');
+    expect(result, 'to contain', `import mermaid from "${DEFAULT_CDN_URL}"`);
+    expect(result, 'to contain', 'mermaid.initialize');
+  });
+
+  it('should generate ESM module script for local mode', () => {
+    const localPath = './assets/mermaid/mermaid.esm.min.mjs';
+    const result = getScript(localOptions(localPath));
+
+    expect(result, 'to contain', '<script type="module">');
+    expect(result, 'to contain', `import mermaid from "${localPath}"`);
+    expect(result, 'to contain', 'mermaid.initialize');
+  });
+
+  it('should use custom CDN URL in CDN mode', () => {
+    const customUrl = 'https://example.com/mermaid.esm.min.mjs';
+    const result = getScript(cdnOptions(customUrl));
+
+    expect(result, 'to contain', `import mermaid from "${customUrl}"`);
+  });
+
+  it('should use relative path in local mode', () => {
+    const localPath = '../assets/mermaid/mermaid.esm.min.mjs';
+    const result = getScript(localOptions(localPath));
+
+    expect(result, 'to contain', `import mermaid from "${localPath}"`);
+  });
+});
+
+describe('resolveMermaidDistPath', () => {
+  it('should return ok result with dist path when mermaid is installed', () => {
+    // mermaid is installed as a dev dependency for testing
+    const result = resolveMermaidDistPath();
+
+    expect(result.ok, 'to be true');
+    if (result.ok) {
+      expect(result.distPath, 'to end with', 'dist');
+      expect(result.distPath, 'to contain', 'node_modules');
+      expect(result.distPath, 'to contain', 'mermaid');
+    }
+  });
+});
+
 describe('processMermaidPage', () => {
   it('should inject styles and scripts when mermaid blocks exist', () => {
     const input = `<!DOCTYPE html>
@@ -143,7 +240,7 @@ describe('processMermaidPage', () => {
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body>
 </html>`;
-    const result = processMermaidPage(input);
+    const result = processMermaidPage(input, cdnOptions());
 
     expect(result, 'to contain', '<style>');
     expect(result, 'to contain', '.mermaid-block');
@@ -159,7 +256,7 @@ describe('processMermaidPage', () => {
 <pre><code class="javascript">const x = 1;</code><button>Copy</button></pre>
 </body>
 </html>`;
-    const result = processMermaidPage(input);
+    const result = processMermaidPage(input, cdnOptions());
 
     expect(result, 'not to contain', '<style>');
     expect(result, 'not to contain', 'mermaid.initialize');
@@ -169,7 +266,7 @@ describe('processMermaidPage', () => {
     const input = `<html><head><title>Test</title></head><body>
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body></html>`;
-    const result = processMermaidPage(input);
+    const result = processMermaidPage(input, cdnOptions());
 
     const styleIndex = result.indexOf('<style>');
     const headEndIndex = result.indexOf('</head>');
@@ -181,7 +278,7 @@ describe('processMermaidPage', () => {
     const input = `<html><head></head><body>
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body></html>`;
-    const result = processMermaidPage(input);
+    const result = processMermaidPage(input, cdnOptions());
 
     const scriptIndex = result.indexOf('<script type="module">');
     const bodyEndIndex = result.indexOf('</body>');
@@ -194,18 +291,18 @@ describe('processMermaidPage', () => {
     const input = `<html><head></head><body>
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body></html>`;
-    const result = processMermaidPage(input);
+    const result = processMermaidPage(input, cdnOptions());
 
     expect(result, 'to contain', '<div class="mermaid-block">');
     expect(result, 'to contain', '<div class="mermaid dark">');
     expect(result, 'to contain', '<div class="mermaid light">');
   });
 
-  it('should use the default CDN URL when not specified', () => {
+  it('should use the default CDN URL in CDN mode', () => {
     const input = `<html><head></head><body>
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body></html>`;
-    const result = processMermaidPage(input);
+    const result = processMermaidPage(input, cdnOptions());
 
     expect(result, 'to contain', `import mermaid from "${DEFAULT_CDN_URL}"`);
   });
@@ -216,7 +313,7 @@ describe('processMermaidPage', () => {
     const input = `<html><head></head><body>
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body></html>`;
-    const result = processMermaidPage(input, customUrl);
+    const result = processMermaidPage(input, cdnOptions(customUrl));
 
     expect(result, 'to contain', `import mermaid from "${customUrl}"`);
     expect(result, 'not to contain', DEFAULT_CDN_URL);
@@ -227,8 +324,29 @@ describe('processMermaidPage', () => {
     const input = `<html><head></head><body>
 <pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
 </body></html>`;
-    const result = processMermaidPage(input, selfHostedUrl);
+    const result = processMermaidPage(input, cdnOptions(selfHostedUrl));
 
     expect(result, 'to contain', `import mermaid from "${selfHostedUrl}"`);
+  });
+
+  it('should use ESM import for local mode', () => {
+    const localPath = './assets/mermaid/mermaid.esm.min.mjs';
+    const input = `<html><head></head><body>
+<pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
+</body></html>`;
+    const result = processMermaidPage(input, localOptions(localPath));
+
+    expect(result, 'to contain', '<script type="module">');
+    expect(result, 'to contain', `import mermaid from "${localPath}"`);
+  });
+
+  it('should use relative path for nested pages in local mode', () => {
+    const localPath = '../../assets/mermaid/mermaid.esm.min.mjs';
+    const input = `<html><head></head><body>
+<pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
+</body></html>`;
+    const result = processMermaidPage(input, localOptions(localPath));
+
+    expect(result, 'to contain', `import mermaid from "${localPath}"`);
   });
 });

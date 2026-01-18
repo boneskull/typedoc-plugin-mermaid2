@@ -10,7 +10,7 @@ rendered diagrams. It automatically adapts to TypeDoc's light and dark themes.
 - Renders Mermaid diagrams from fenced code blocks
 - Automatic dark/light theme switching based on TypeDoc theme
 - Graceful fallback to plain code when JavaScript is disabled
-- Loads Mermaid from CDN (no bundled dependencies)
+- Loads Mermaid from CDN or locally from your `node_modules`
 - Responsive diagram sizing
 
 ## Install
@@ -78,13 +78,48 @@ types and syntax.
 
 ## Configuration
 
+### `mermaidSource`
+
+Where to load the Mermaid library from. Defaults to `"cdn"`.
+
+| Value     | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| `"cdn"`   | Load from a CDN URL (configured via `mermaidCdnUrl`)             |
+| `"local"` | Copy mermaid's ESM bundle from `node_modules` to the docs output |
+
+**typedoc.json:**
+
+```json
+{
+  "mermaidSource": "local"
+}
+```
+
+When using `"local"`, you must install mermaid in your project:
+
+```shell
+npm install mermaid -D
+```
+
+The plugin copies mermaid's ESM entry point and chunks directory to
+`assets/mermaid/` in your docs output. Diagram-specific code is lazy-loaded on
+demand, so only the diagram types you actually use are downloaded by browsers.
+
+**Use `"local"` when you need:**
+
+- Offline documentation
+- Air-gapped or restricted network environments
+- Pinned mermaid versions bundled with your docs
+- Full control over the mermaid distribution
+
 ### `mermaidCdnUrl`
 
 URL to load the Mermaid library from. Defaults to
-`https://unpkg.com/mermaid@11/dist/mermaid.esm.min.mjs`.
+`https://unpkg.com/mermaid@latest/dist/mermaid.esm.min.mjs`.
 
-This is useful for using alternative CDNs, self-hosting the library, or
-environments with CDN restrictions.
+Only used when `mermaidSource` is `"cdn"` (the default).
+
+This is useful for using alternative CDNs or self-hosting the library.
 
 **typedoc.json:**
 
@@ -109,8 +144,8 @@ The plugin hooks into TypeDoc's HTML rendering pipeline and:
 3. Injects CSS and JavaScript to render diagrams and switch themes
 4. Preserves the original code as a fallback for non-JS environments
 
-Diagrams are rendered client-side using the Mermaid library loaded from unpkg
-CDN.
+Diagrams are rendered client-side using the Mermaid library, loaded either from
+a CDN or from a local copy in your docs output (depending on `mermaidSource`).
 
 ## Acknowledgments
 
@@ -126,8 +161,9 @@ This plugin is adapted from
 | Rendering strategy    | Dual dark/light diagrams with CSS switching | Single diagram per block        |
 | Theme support         | Automatic dark/light based on TypeDoc theme | Manual theme configuration      |
 | `@mermaid` JSDoc tag  | Not supported                               | Supported                       |
-| Mermaid loading       | CDN (unpkg)                                 | Bundled or CDN                  |
-| Configuration options | CDN URL                                     | Theme, version, CDN URL         |
+| Mermaid loading       | CDN or local ESM bundle with lazy chunks    | Bundled UMD or CDN              |
+| Offline support       | Yes (with `mermaidSource: "local"`)         | Yes (when bundled)              |
+| Configuration options | `mermaidSource`, `mermaidCdnUrl`            | `mermaidVersion`, `mermaidCdn`  |
 
 **Why a new plugin?**
 

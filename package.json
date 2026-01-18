@@ -130,6 +130,7 @@
     "tsdoc": true
   },
   "zshy": {
+    "cjs": false,
     "exports": {
       ".": "./src/index.ts",
       "./package.json": "./package.json"

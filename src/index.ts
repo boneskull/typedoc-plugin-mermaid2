@@ -6,14 +6,23 @@
  * @packageDocumentation
  * @see {@link https://github.com/kamiazya/typedoc-plugin-mermaid}
  */
-import { type Application, type PageEvent, Renderer } from 'typedoc';
+import {
+  type Application,
+  type PageEvent,
+  ParameterType,
+  Renderer,
+} from 'typedoc';
 
-const MERMAID_VERSION = '11';
+/**
+ * Default CDN URL for loading the Mermaid library.
+ */
+export const DEFAULT_CDN_URL =
+  'https://unpkg.com/mermaid@latest/dist/mermaid.esm.min.mjs';
 
 const MERMAID_BLOCK_START = '<div class="mermaid-block">';
 const MERMAID_BLOCK_END = '</div>';
 
-const style = String.raw`
+const style = `
 <style>
 /* Contain mermaid blocks */
 .mermaid-block {
@@ -49,9 +58,15 @@ const style = String.raw`
 </style>
 `;
 
-const script = String.raw`
+/**
+ * Generate the script tag for initializing Mermaid.
+ *
+ * @param cdnUrl - URL to load the Mermaid library from
+ * @returns The script HTML to inject
+ */
+const getScript = (cdnUrl: string): string => `
 <script type="module">
-import mermaid from "https://unpkg.com/mermaid@${MERMAID_VERSION}/dist/mermaid.esm.min.mjs";
+import mermaid from "${cdnUrl}";
 
 document.documentElement.classList.add("mermaid-enabled");
 
@@ -179,9 +194,13 @@ export const transformMermaidBlocks = (html: string): string => {
  * Check if page has mermaid blocks and inject script/styles.
  *
  * @param html - The HTML to process
+ * @param cdnUrl - URL to load the Mermaid library from
  * @returns The processed HTML
  */
-export const processMermaidPage = (html: string): string => {
+export const processMermaidPage = (
+  html: string,
+  cdnUrl = DEFAULT_CDN_URL,
+): string => {
   // First transform any mermaid code blocks
   html = transformMermaidBlocks(html);
 
@@ -199,7 +218,10 @@ export const processMermaidPage = (html: string): string => {
   // Insert script before </body>
   const bodyEndIndex = html.lastIndexOf('</body>');
   if (bodyEndIndex !== -1) {
-    html = html.slice(0, bodyEndIndex) + script + html.slice(bodyEndIndex);
+    html =
+      html.slice(0, bodyEndIndex) +
+      getScript(cdnUrl) +
+      html.slice(bodyEndIndex);
   }
 
   return html;
@@ -211,17 +233,19 @@ export const processMermaidPage = (html: string): string => {
  * @param app - The TypeDoc application
  */
 export const load = (app: Application): void => {
+  // Declare the mermaidCdnUrl option
+  app.options.addDeclaration({
+    defaultValue: DEFAULT_CDN_URL,
+    help: 'URL to load the Mermaid library from',
+    name: 'mermaidCdnUrl',
+    type: ParameterType.String,
+  });
+
   // Process mermaid blocks in final HTML output
-  // Note: Renderer extends EventDispatcher with an `on` method, but TypeScript
-  // has trouble resolving types through typedoc's subpath imports (#utils).
-  // The runtime API definitely exists.
-  (
-    app.renderer as typeof app.renderer & {
-      on: (event: string, callback: (page: PageEvent) => void) => void;
-    }
-  ).on(Renderer.EVENT_END_PAGE, (page: PageEvent) => {
+  app.renderer.on(Renderer.EVENT_END_PAGE, (page: PageEvent) => {
     if (page.contents) {
-      page.contents = processMermaidPage(page.contents);
+      const cdnUrl = app.options.getValue('mermaidCdnUrl') as string;
+      page.contents = processMermaidPage(page.contents, cdnUrl);
     }
   });
 };

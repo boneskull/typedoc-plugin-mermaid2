@@ -76,6 +76,30 @@ Any diagram type supported by Mermaid works:
 See the [Mermaid documentation](https://mermaid.js.org/intro/) for all diagram
 types and syntax.
 
+## Configuration
+
+### `mermaidCdnUrl`
+
+URL to load the Mermaid library from. Defaults to
+`https://unpkg.com/mermaid@11/dist/mermaid.esm.min.mjs`.
+
+This is useful for using alternative CDNs, self-hosting the library, or
+environments with CDN restrictions.
+
+**typedoc.json:**
+
+```json
+{
+  "mermaidCdnUrl": "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"
+}
+```
+
+**Command line:**
+
+```shell
+typedoc --mermaidCdnUrl "https://your-cdn.example.com/mermaid.esm.min.mjs"
+```
+
 ## How It Works
 
 The plugin hooks into TypeDoc's HTML rendering pipeline and:
@@ -103,7 +127,7 @@ This plugin is adapted from
 | Theme support         | Automatic dark/light based on TypeDoc theme | Manual theme configuration      |
 | `@mermaid` JSDoc tag  | Not supported                               | Supported                       |
 | Mermaid loading       | CDN (unpkg)                                 | Bundled or CDN                  |
-| Configuration options | None (zero-config)                          | Theme, version, CDN URL         |
+| Configuration options | CDN URL                                     | Theme, version, CDN URL         |
 
 **Why a new plugin?**
 

@@ -2,6 +2,7 @@ import { expect } from 'bupkis';
 import { describe, it } from 'node:test';
 
 import {
+  DEFAULT_CDN_URL,
   escapeHtml,
   processMermaidPage,
   toMermaidBlock,
@@ -198,5 +199,36 @@ describe('processMermaidPage', () => {
     expect(result, 'to contain', '<div class="mermaid-block">');
     expect(result, 'to contain', '<div class="mermaid dark">');
     expect(result, 'to contain', '<div class="mermaid light">');
+  });
+
+  it('should use the default CDN URL when not specified', () => {
+    const input = `<html><head></head><body>
+<pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
+</body></html>`;
+    const result = processMermaidPage(input);
+
+    expect(result, 'to contain', `import mermaid from "${DEFAULT_CDN_URL}"`);
+  });
+
+  it('should use a custom CDN URL when specified', () => {
+    const customUrl =
+      'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    const input = `<html><head></head><body>
+<pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
+</body></html>`;
+    const result = processMermaidPage(input, customUrl);
+
+    expect(result, 'to contain', `import mermaid from "${customUrl}"`);
+    expect(result, 'not to contain', DEFAULT_CDN_URL);
+  });
+
+  it('should handle a self-hosted Mermaid URL', () => {
+    const selfHostedUrl = '/assets/vendor/mermaid.esm.min.mjs';
+    const input = `<html><head></head><body>
+<pre><code class="mermaid">graph TD</code><button>Copy</button></pre>
+</body></html>`;
+    const result = processMermaidPage(input, selfHostedUrl);
+
+    expect(result, 'to contain', `import mermaid from "${selfHostedUrl}"`);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@boneskull/typedoc-plugin-mermaid",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "TypeDoc plugin for rendering Mermaid diagrams",
   "repository": {

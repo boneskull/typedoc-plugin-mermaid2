@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/boneskull/typedoc-plugin-mermaid2/compare/typedoc-plugin-mermaid-v0.2.0...typedoc-plugin-mermaid-v0.2.1) (2026-02-01)
+
+
+### Bug Fixes
+
+* restore actual characters in unescapeHtml for mermaid arrow syntax ([2d77301](https://github.com/boneskull/typedoc-plugin-mermaid2/commit/2d773018943363c0cc1f244f153380977a0667d2))
+
 ## [0.2.0](https://github.com/boneskull/typedoc-plugin-mermaid2/compare/typedoc-plugin-mermaid-v0.1.1...typedoc-plugin-mermaid-v0.2.0) (2026-01-18)
 
 

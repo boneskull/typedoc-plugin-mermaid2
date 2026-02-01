@@ -271,19 +271,21 @@ export const escapeHtml = (str: string): string => {
 };
 
 /**
- * Unescape HTML entities back to plain text for mermaid to parse. Angle
- * brackets use mermaid's #entity; syntax to avoid parsing issues.
+ * Unescape HTML entities back to plain text for mermaid to parse.
+ *
+ * TypeDoc escapes special characters in code blocks, but Mermaid needs the
+ * actual characters (especially `>` for arrows like `-->` and `->>`).
  *
  * @param str - The string to unescape
  * @returns The unescaped string
  */
 export const unescapeHtml = (str: string): string => {
   return str
-    .replace(/&lt;/g, '#lt;') // Use mermaid's entity syntax for <
-    .replace(/&gt;/g, '#gt;') // Use mermaid's entity syntax for >
-    .replace(/&quot;/g, '#quot;')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '#amp;');
+    .replace(/&amp;/g, '&');
 };
 
 /**

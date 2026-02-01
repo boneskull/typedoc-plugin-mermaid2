@@ -1,5 +1,6 @@
 import { expect } from 'bupkis';
-import { describe, it } from 'node:test';
+import { JSDOM } from 'jsdom';
+import { before, describe, it } from 'node:test';
 
 import {
   DEFAULT_CDN_URL,
@@ -61,32 +62,86 @@ describe('escapeHtml', () => {
 });
 
 describe('unescapeHtml', () => {
-  it('should convert &lt; to mermaid entity #lt;', () => {
-    expect(unescapeHtml('&lt;'), 'to equal', '#lt;');
+  it('should convert &lt; to <', () => {
+    expect(unescapeHtml('&lt;'), 'to equal', '<');
   });
 
-  it('should convert &gt; to mermaid entity #gt;', () => {
-    expect(unescapeHtml('&gt;'), 'to equal', '#gt;');
+  it('should convert &gt; to >', () => {
+    expect(unescapeHtml('&gt;'), 'to equal', '>');
   });
 
-  it('should convert &quot; to mermaid entity #quot;', () => {
-    expect(unescapeHtml('&quot;'), 'to equal', '#quot;');
+  it('should convert &quot; to "', () => {
+    expect(unescapeHtml('&quot;'), 'to equal', '"');
   });
 
-  it('should convert &#39; back to apostrophe', () => {
+  it('should convert &#39; to apostrophe', () => {
     expect(unescapeHtml('&#39;'), 'to equal', "'");
   });
 
-  it('should convert &amp; to mermaid entity #amp;', () => {
-    expect(unescapeHtml('&amp;'), 'to equal', '#amp;');
+  it('should convert &amp; to &', () => {
+    expect(unescapeHtml('&amp;'), 'to equal', '&');
   });
 
   it('should handle strings with multiple entities', () => {
     expect(
       unescapeHtml('&lt;a href=&quot;foo&quot;&gt;'),
       'to equal',
-      '#lt;a href=#quot;foo#quot;#gt;',
+      '<a href="foo">',
     );
+  });
+});
+
+describe('mermaid syntax validation', () => {
+  // Set up jsdom globals so mermaid can run in Node.js
+  before(() => {
+    const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
+      pretendToBeVisual: true,
+      url: 'http://localhost',
+    });
+    // @ts-expect-error - assigning to global for mermaid compatibility
+    global.window = dom.window;
+    global.document = dom.window.document;
+    global.DOMParser = dom.window.DOMParser;
+  });
+
+  it('should produce valid mermaid syntax after unescaping TypeDoc output', async () => {
+    const mermaid = await import('mermaid');
+
+    // Various diagram types with arrows that TypeDoc would escape
+    const testCases = [
+      'stateDiagram-v2\n  [*] --> Idle\n  Idle --> Running',
+      'sequenceDiagram\n  A->>B: Hello\n  B-->>A: Hi',
+      'flowchart LR\n  A --> B --> C',
+      'flowchart TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[End]',
+    ];
+
+    for (const rawCode of testCases) {
+      // Simulate TypeDoc's HTML escaping
+      const escaped = escapeHtml(rawCode);
+
+      // Our unescape should restore valid mermaid syntax
+      const unescaped = unescapeHtml(escaped);
+
+      // mermaid.parse() throws on invalid syntax
+      const result = await mermaid.default.parse(unescaped);
+      expect(result, 'to be truthy');
+    }
+  });
+
+  it('should fail to parse if arrows are not properly unescaped', async () => {
+    const mermaid = await import('mermaid');
+
+    // This simulates the OLD broken behavior where > became #gt;
+    const brokenCode = 'stateDiagram-v2\n  [*] --#gt; Idle';
+
+    let parseError: Error | undefined;
+    try {
+      await mermaid.default.parse(brokenCode);
+    } catch (err) {
+      parseError = err as Error;
+    }
+
+    expect(parseError, 'to be defined');
   });
 });
 

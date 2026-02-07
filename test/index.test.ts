@@ -4,7 +4,6 @@ import { before, describe, it } from 'node:test';
 
 import {
   DEFAULT_CDN_URL,
-  escapeHtml,
   getRelativeAssetPath,
   getScript,
   type MermaidScriptOptions,
@@ -12,7 +11,6 @@ import {
   resolveMermaidDistPath,
   toMermaidBlock,
   transformMermaidBlocks,
-  unescapeHtml,
 } from '../src/index.js';
 
 /**
@@ -35,62 +33,6 @@ const localOptions = (
   source: 'local',
 });
 
-describe('escapeHtml', () => {
-  it('should escape ampersands', () => {
-    expect(escapeHtml('foo & bar'), 'to equal', 'foo &amp; bar');
-  });
-
-  it('should escape angle brackets', () => {
-    expect(escapeHtml('<div>'), 'to equal', '&lt;div&gt;');
-  });
-
-  it('should escape quotes', () => {
-    expect(escapeHtml('"hello"'), 'to equal', '&quot;hello&quot;');
-  });
-
-  it('should escape apostrophes', () => {
-    expect(escapeHtml("it's"), 'to equal', 'it&#39;s');
-  });
-
-  it('should handle strings with multiple entities', () => {
-    expect(
-      escapeHtml('<a href="foo">bar & baz</a>'),
-      'to equal',
-      '&lt;a href=&quot;foo&quot;&gt;bar &amp; baz&lt;/a&gt;',
-    );
-  });
-});
-
-describe('unescapeHtml', () => {
-  it('should convert &lt; to <', () => {
-    expect(unescapeHtml('&lt;'), 'to equal', '<');
-  });
-
-  it('should convert &gt; to >', () => {
-    expect(unescapeHtml('&gt;'), 'to equal', '>');
-  });
-
-  it('should convert &quot; to "', () => {
-    expect(unescapeHtml('&quot;'), 'to equal', '"');
-  });
-
-  it('should convert &#39; to apostrophe', () => {
-    expect(unescapeHtml('&#39;'), 'to equal', "'");
-  });
-
-  it('should convert &amp; to &', () => {
-    expect(unescapeHtml('&amp;'), 'to equal', '&');
-  });
-
-  it('should handle strings with multiple entities', () => {
-    expect(
-      unescapeHtml('&lt;a href=&quot;foo&quot;&gt;'),
-      'to equal',
-      '<a href="foo">',
-    );
-  });
-});
-
 describe('mermaid syntax validation', () => {
   // Set up jsdom globals so mermaid can run in Node.js
   before(() => {
@@ -104,44 +46,34 @@ describe('mermaid syntax validation', () => {
     global.DOMParser = dom.window.DOMParser;
   });
 
-  it('should produce valid mermaid syntax after unescaping TypeDoc output', async () => {
+  it('should produce HTML that browsers decode into valid mermaid syntax', async () => {
     const mermaid = await import('mermaid');
 
-    // Various diagram types with arrows that TypeDoc would escape
+    // Each test case is HTML-encoded content as TypeDoc would produce inside
+    // a <code> element. The plugin passes this through unchanged into
+    // <div class="mermaid"> elements via toMermaidBlock().
     const testCases = [
-      'stateDiagram-v2\n  [*] --> Idle\n  Idle --> Running',
-      'sequenceDiagram\n  A->>B: Hello\n  B-->>A: Hi',
-      'flowchart LR\n  A --> B --> C',
-      'flowchart TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[End]',
+      'stateDiagram-v2\n  [*] --&gt; Idle\n  Idle --&gt; Running',
+      'sequenceDiagram\n  A-&gt;&gt;B: Hello\n  B--&gt;&gt;A: Hi',
+      'flowchart LR\n  A --&gt; B --&gt; C',
+      'flowchart LR\n  A &lt;--&gt; B\n  B &lt;--&gt; C',
     ];
 
-    for (const rawCode of testCases) {
-      // Simulate TypeDoc's HTML escaping
-      const escaped = escapeHtml(rawCode);
+    for (const encoded of testCases) {
+      // Run the plugin's toMermaidBlock on the encoded content
+      const blockHtml = toMermaidBlock(encoded);
 
-      // Our unescape should restore valid mermaid syntax
-      const unescaped = unescapeHtml(escaped);
+      // Simulate the browser: parse the plugin's HTML output, then read
+      // textContent from a mermaid div to get the decoded text that
+      // mermaid's parser would receive at runtime.
+      const dom = new JSDOM(`<body>${blockHtml}</body>`);
+      const mermaidDiv = dom.window.document.querySelector('.mermaid.light');
+      const diagramText = mermaidDiv?.textContent ?? '';
 
-      // mermaid.parse() throws on invalid syntax
-      const result = await mermaid.default.parse(unescaped);
+      // Verify mermaid can parse the result
+      const result = await mermaid.default.parse(diagramText);
       expect(result, 'to be truthy');
     }
-  });
-
-  it('should fail to parse if arrows are not properly unescaped', async () => {
-    const mermaid = await import('mermaid');
-
-    // This simulates the OLD broken behavior where > became #gt;
-    const brokenCode = 'stateDiagram-v2\n  [*] --#gt; Idle';
-
-    let parseError: Error | undefined;
-    try {
-      await mermaid.default.parse(brokenCode);
-    } catch (err) {
-      parseError = err as Error;
-    }
-
-    expect(parseError, 'to be defined');
   });
 });
 
@@ -166,8 +98,67 @@ describe('toMermaidBlock', () => {
   it('should trim whitespace from input', () => {
     const result = toMermaidBlock('  graph TD  ');
 
-    // The plain code in mermaid divs should be trimmed
+    // The code in mermaid divs should be trimmed
     expect(result, 'to contain', '%%\ngraph TD</div>');
+  });
+
+  it('should preserve HTML entities in mermaid divs', () => {
+    // HTML entities must NOT be unescaped — mermaid's entityDecode handles them
+    const result = toMermaidBlock('graph TD\n  A--&gt;B');
+
+    expect(result, 'to contain', 'A--&gt;B</div>');
+  });
+
+  it('should preserve HTML entities for angle brackets followed by letters', () => {
+    // v0.2.1 edge case: <int> would be parsed as HTML if unescaped
+    const result = toMermaidBlock('A[List&lt;int&gt;] --&gt; B');
+
+    expect(result, 'to contain', 'List&lt;int&gt;');
+    expect(result, 'not to contain', 'List<int>');
+  });
+
+  it('should preserve HTML entities for HTML-like content in labels', () => {
+    // <b> would be parsed as a real HTML element if unescaped
+    const result = toMermaidBlock(
+      'A[&quot;&lt;b&gt;bold&lt;/b&gt;&quot;] --&gt; B',
+    );
+
+    expect(result, 'to contain', '&lt;b&gt;bold&lt;/b&gt;');
+    expect(result, 'not to contain', '<b>bold</b>');
+  });
+
+  it('should preserve &amp; entities in mermaid divs', () => {
+    const result = toMermaidBlock('A[AT&amp;T] --&gt; B');
+
+    expect(result, 'to contain', 'AT&amp;T');
+  });
+
+  it('should preserve &#39; entities in mermaid divs', () => {
+    const result = toMermaidBlock('A[it&#39;s done] --&gt; B');
+
+    expect(result, 'to contain', 'it&#39;s done');
+  });
+
+  it('should preserve HTML entities in fallback pre block', () => {
+    const result = toMermaidBlock('A[List&lt;int&gt;] --&gt; B');
+
+    expect(
+      result,
+      'to contain',
+      '<code class="language-mermaid">A[List&lt;int&gt;] --&gt; B</code>',
+    );
+  });
+
+  it('should preserve mermaid #entity; syntax unchanged', () => {
+    const result = toMermaidBlock('A[&quot;Value #lt; 10&quot;]');
+
+    expect(result, 'to contain', '#lt;');
+  });
+
+  it('should pass through content with no HTML entities unchanged', () => {
+    const result = toMermaidBlock('graph TD\n  A --- B');
+
+    expect(result, 'to contain', 'A --- B</div>');
   });
 });
 
@@ -202,7 +193,7 @@ describe('transformMermaidBlocks', () => {
     expect(blockCount, 'to equal', 2);
   });
 
-  it('should handle multiline mermaid code', () => {
+  it('should handle multiline mermaid code and preserve entities', () => {
     const input = `<pre><code class="mermaid">graph TD
   A[Start] --&gt; B[End]
   B --&gt; C[Done]</code><button>Copy</button></pre>`;
@@ -210,6 +201,9 @@ describe('transformMermaidBlocks', () => {
 
     expect(result, 'to contain', '<div class="mermaid-block">');
     expect(result, 'to contain', 'A[Start]');
+    // HTML entities must survive the transformation
+    expect(result, 'to contain', '--&gt; B[End]');
+    expect(result, 'to contain', '--&gt; C[Done]');
   });
 });
 
@@ -403,5 +397,21 @@ describe('processMermaidPage', () => {
     const result = processMermaidPage(input, localOptions(localPath));
 
     expect(result, 'to contain', `import mermaid from "${localPath}"`);
+  });
+
+  it('should preserve HTML entities through the full processing pipeline', () => {
+    const input = `<html><head></head><body>
+<pre><code class="mermaid">flowchart LR
+  A[List&lt;int&gt;] --&gt; B[AT&amp;T]
+  B &lt;--&gt; C</code><button>Copy</button></pre>
+</body></html>`;
+    const result = processMermaidPage(input, cdnOptions());
+
+    // Entities must survive into the mermaid divs
+    expect(result, 'to contain', 'List&lt;int&gt;');
+    expect(result, 'to contain', 'AT&amp;T');
+    expect(result, 'to contain', '&lt;--&gt;');
+    // Raw angle brackets must NOT appear (would be parsed as HTML by browser)
+    expect(result, 'not to contain', 'List<int>');
   });
 });

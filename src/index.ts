@@ -256,52 +256,28 @@ ${mermaidInitScript}
 };
 
 /**
- * Escape HTML entities for display in fallback pre block.
- *
- * @param str - The string to escape
- * @returns The escaped string
- */
-export const escapeHtml = (str: string): string => {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
-/**
- * Unescape HTML entities back to plain text for mermaid to parse.
- *
- * TypeDoc escapes special characters in code blocks, but Mermaid needs the
- * actual characters (especially `>` for arrows like `-->` and `->>`).
- *
- * @param str - The string to unescape
- * @returns The unescaped string
- */
-export const unescapeHtml = (str: string): string => {
-  return str
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
-};
-
-/**
  * Convert HTML-escaped mermaid code to a block with dark/light variants.
+ *
+ * The HTML-encoded content from TypeDoc (e.g., `&lt;` for `<`) is passed
+ * directly to the mermaid divs. This works because:
+ *
+ * 1. The browser decodes HTML entities to text nodes (no tag creation)
+ * 2. Mermaid reads `element.innerHTML` which re-encodes `<`/`>` as `&lt;`/`&gt;`
+ * 3. Mermaid's `entityDecode()` properly converts them back to raw characters
+ * 4. The lexer then sees literal `<` and `>` for arrow recognition
+ *
+ * This avoids inserting raw `<` into the HTML, which would cause the browser to
+ * parse sequences like `<int>` as HTML elements, corrupting the diagram.
  *
  * @param escapedCode - HTML-escaped mermaid code from the pre/code block
  * @returns The mermaid block HTML
  */
 export const toMermaidBlock = (escapedCode: string): string => {
-  // Unescape for mermaid to parse, then re-escape for the fallback pre
-  const plainCode = unescapeHtml(escapedCode).trim();
-  const htmlCode = escapeHtml(plainCode);
+  const trimmedCode = escapedCode.trim();
 
-  const dark = `<div class="mermaid dark">%%{init:{"theme":"dark"}}%%\n${plainCode}</div>`;
-  const light = `<div class="mermaid light">%%{init:{"theme":"default"}}%%\n${plainCode}</div>`;
-  const pre = `<pre><code class="language-mermaid">${htmlCode}</code></pre>`;
+  const dark = `<div class="mermaid dark">%%{init:{"theme":"dark"}}%%\n${trimmedCode}</div>`;
+  const light = `<div class="mermaid light">%%{init:{"theme":"default"}}%%\n${trimmedCode}</div>`;
+  const pre = `<pre><code class="language-mermaid">${trimmedCode}</code></pre>`;
 
   return MERMAID_BLOCK_START + dark + light + pre + MERMAID_BLOCK_END;
 };

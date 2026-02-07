@@ -86,16 +86,15 @@ Two options declared via TypeDoc's `app.options.addDeclaration()`:
 
 All implementation is in `src/index.ts`:
 
-| Function                                | Purpose                                                    |
-| --------------------------------------- | ---------------------------------------------------------- |
-| `load(app)`                             | TypeDoc plugin entry point; registers options and handlers |
-| `processMermaidPage(html, options)`     | Main transformation: finds blocks, injects styles/scripts  |
-| `transformMermaidBlocks(html)`          | Regex replacement of `<pre><code class="mermaid">` blocks  |
-| `toMermaidBlock(escapedCode)`           | Creates dark/light div structure with fallback             |
-| `getScript(options)`                    | Generates the ES module script for mermaid init            |
-| `resolveMermaidDistPath()`              | Finds mermaid in node_modules for local mode               |
-| `getRelativeAssetPath(pageUrl)`         | Calculates `../` depth for nested pages                    |
-| `escapeHtml(str)` / `unescapeHtml(str)` | HTML entity handling for mermaid syntax                    |
+| Function                            | Purpose                                                    |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `load(app)`                         | TypeDoc plugin entry point; registers options and handlers |
+| `processMermaidPage(html, options)` | Main transformation: finds blocks, injects styles/scripts  |
+| `transformMermaidBlocks(html)`      | Regex replacement of `<pre><code class="mermaid">` blocks  |
+| `toMermaidBlock(escapedCode)`       | Creates dark/light div structure with fallback             |
+| `getScript(options)`                | Generates the ES module script for mermaid init            |
+| `resolveMermaidDistPath()`          | Finds mermaid in node_modules for local mode               |
+| `getRelativeAssetPath(pageUrl)`     | Calculates `../` depth for nested pages                    |
 
 ## Testing Patterns
 

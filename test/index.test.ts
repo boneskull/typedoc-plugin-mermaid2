@@ -50,8 +50,9 @@ describe('mermaid syntax validation', () => {
     const mermaid = await import('mermaid');
 
     // Each test case is HTML-encoded content as TypeDoc would produce inside
-    // a <code> element. The plugin passes this through unchanged into
-    // <div class="mermaid"> elements via toMermaidBlock().
+    // a <code> element. The plugin stores this in data-mermaid-code attributes
+    // via toMermaidBlock(). The browser decodes entities when reading
+    // el.dataset.mermaidCode, giving mermaid the raw text it expects.
     const testCases = [
       'stateDiagram-v2\n  [*] --&gt; Idle\n  Idle --&gt; Running',
       'sequenceDiagram\n  A-&gt;&gt;B: Hello\n  B--&gt;&gt;A: Hi',
@@ -64,11 +65,11 @@ describe('mermaid syntax validation', () => {
       const blockHtml = toMermaidBlock(encoded);
 
       // Simulate the browser: parse the plugin's HTML output, then read
-      // textContent from a mermaid div to get the decoded text that
-      // mermaid's parser would receive at runtime.
+      // dataset.mermaidCode to get the decoded text that the client-side
+      // script would pass to mermaid.run() at runtime.
       const dom = new JSDOM(`<body>${blockHtml}</body>`);
-      const mermaidDiv = dom.window.document.querySelector('.mermaid.light');
-      const diagramText = mermaidDiv?.textContent ?? '';
+      const mermaidDiv = dom.window.document.querySelector('.mermaid')!;
+      const diagramText = (mermaidDiv as HTMLElement).dataset.mermaidCode!;
 
       // Verify mermaid can parse the result
       const result = await mermaid.default.parse(diagramText);
@@ -78,14 +79,14 @@ describe('mermaid syntax validation', () => {
 });
 
 describe('toMermaidBlock', () => {
-  it('should create a block with dark and light variants', () => {
+  it('should create a block with a single mermaid div and data attribute', () => {
     const result = toMermaidBlock('graph TD\n  A--&gt;B');
 
     expect(result, 'to contain', '<div class="mermaid-block">');
-    expect(result, 'to contain', '<div class="mermaid dark">');
-    expect(result, 'to contain', '<div class="mermaid light">');
-    expect(result, 'to contain', '%%{init:{"theme":"dark"}}%%');
-    expect(result, 'to contain', '%%{init:{"theme":"default"}}%%');
+    expect(result, 'to contain', 'data-mermaid-code="graph TD');
+    expect(result, 'to contain', '></div>');
+    // Theme directive is added at render time by client-side JS
+    expect(result, 'not to contain', '%%{init:');
   });
 
   it('should include fallback pre/code block', () => {
@@ -98,15 +99,16 @@ describe('toMermaidBlock', () => {
   it('should trim whitespace from input', () => {
     const result = toMermaidBlock('  graph TD  ');
 
-    // The code in mermaid divs should be trimmed
-    expect(result, 'to contain', '%%\ngraph TD</div>');
+    // The code in data-mermaid-code should be trimmed
+    expect(result, 'to contain', 'data-mermaid-code="graph TD"');
   });
 
-  it('should preserve HTML entities in mermaid divs', () => {
-    // HTML entities must NOT be unescaped — mermaid's entityDecode handles them
+  it('should preserve HTML entities in data attribute', () => {
+    // HTML entities must NOT be unescaped — they're decoded by the browser when
+    // read via dataset.mermaidCode
     const result = toMermaidBlock('graph TD\n  A--&gt;B');
 
-    expect(result, 'to contain', 'A--&gt;B</div>');
+    expect(result, 'to contain', 'A--&gt;B');
   });
 
   it('should preserve HTML entities for angle brackets followed by letters', () => {
@@ -127,13 +129,13 @@ describe('toMermaidBlock', () => {
     expect(result, 'not to contain', '<b>bold</b>');
   });
 
-  it('should preserve &amp; entities in mermaid divs', () => {
+  it('should preserve &amp; entities in data attribute', () => {
     const result = toMermaidBlock('A[AT&amp;T] --&gt; B');
 
     expect(result, 'to contain', 'AT&amp;T');
   });
 
-  it('should preserve &#39; entities in mermaid divs', () => {
+  it('should preserve &#39; entities in data attribute', () => {
     const result = toMermaidBlock('A[it&#39;s done] --&gt; B');
 
     expect(result, 'to contain', 'it&#39;s done');
@@ -158,7 +160,7 @@ describe('toMermaidBlock', () => {
   it('should pass through content with no HTML entities unchanged', () => {
     const result = toMermaidBlock('graph TD\n  A --- B');
 
-    expect(result, 'to contain', 'A --- B</div>');
+    expect(result, 'to contain', 'A --- B');
   });
 });
 
@@ -240,6 +242,7 @@ describe('getScript', () => {
     expect(result, 'to contain', '<script type="module">');
     expect(result, 'to contain', `import mermaid from "${DEFAULT_CDN_URL}"`);
     expect(result, 'to contain', 'mermaid.initialize');
+    expect(result, 'to contain', 'startOnLoad: false');
   });
 
   it('should generate ESM module script for local mode', () => {
@@ -249,6 +252,7 @@ describe('getScript', () => {
     expect(result, 'to contain', '<script type="module">');
     expect(result, 'to contain', `import mermaid from "${localPath}"`);
     expect(result, 'to contain', 'mermaid.initialize');
+    expect(result, 'to contain', 'startOnLoad: false');
   });
 
   it('should use custom CDN URL in CDN mode', () => {
@@ -343,8 +347,7 @@ describe('processMermaidPage', () => {
     const result = processMermaidPage(input, cdnOptions());
 
     expect(result, 'to contain', '<div class="mermaid-block">');
-    expect(result, 'to contain', '<div class="mermaid dark">');
-    expect(result, 'to contain', '<div class="mermaid light">');
+    expect(result, 'to contain', 'data-mermaid-code="graph TD"');
   });
 
   it('should use the default CDN URL in CDN mode', () => {
@@ -407,11 +410,11 @@ describe('processMermaidPage', () => {
 </body></html>`;
     const result = processMermaidPage(input, cdnOptions());
 
-    // Entities must survive into the mermaid divs
+    // Entities must survive into the data-mermaid-code attribute
     expect(result, 'to contain', 'List&lt;int&gt;');
     expect(result, 'to contain', 'AT&amp;T');
     expect(result, 'to contain', '&lt;--&gt;');
-    // Raw angle brackets must NOT appear (would be parsed as HTML by browser)
+    // Raw angle brackets must NOT appear (would break attribute parsing)
     expect(result, 'not to contain', 'List<int>');
   });
 });

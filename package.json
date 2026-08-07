@@ -82,7 +82,7 @@
     "lint-staged": "16.2.7",
     "markdownlint-cli2": "0.20.0",
     "markdownlint-cli2-formatter-pretty": "0.0.9",
-    "mermaid": "11.15.0",
+    "mermaid": "11.16.1",
     "npm-run-all2": "8.0.4",
     "prettier": "3.7.4",
     "prettier-plugin-jsdoc": "1.8.0",

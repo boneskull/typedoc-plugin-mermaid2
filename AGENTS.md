@@ -60,14 +60,14 @@ The plugin hooks into TypeDoc's rendering pipeline:
 1. **`Renderer.EVENT_BEGIN`**: Validates configuration; if `mermaidSource: "local"`, resolves mermaid's dist path early
 2. **`Renderer.EVENT_END_PAGE`**: For each HTML page:
    - Finds `<pre><code class="mermaid">` blocks
-   - Transforms them into dual dark/light `<div class="mermaid">` blocks
-   - Injects CSS for theme switching and fallback handling
-   - Injects ES module script to initialize Mermaid
+   - Transforms them into single `<div class="mermaid">` blocks
+   - Injects CSS for fallback handling
+   - Injects ES module script to render diagrams and handle theme switching
 3. **`postRenderAsyncJobs`**: If local mode, copies mermaid ESM files to `assets/mermaid/`
 
 ### Key Design Decisions
 
-**Dual diagrams for theming**: Each mermaid block becomes two `<div>`s (dark + light themed), with CSS toggling visibility based on TypeDoc's `data-theme` attribute. This ensures diagrams match the documentation theme.
+**Single diagram with re-render**: Each mermaid block becomes one `<div class="mermaid">`. The client-side script renders it with `mermaid.run()` using the active theme's directive, and re-renders on theme change. This avoids duplicate SVG marker IDs that break arrowheads in certain diagram types.
 
 **ESM-only loading**: Both CDN and local modes use ES module imports (`import mermaid from "..."`). Local mode preserves mermaid's lazy-loaded chunks directory for efficient loading.
 
@@ -86,16 +86,15 @@ Two options declared via TypeDoc's `app.options.addDeclaration()`:
 
 All implementation is in `src/index.ts`:
 
-| Function                                | Purpose                                                    |
-| --------------------------------------- | ---------------------------------------------------------- |
-| `load(app)`                             | TypeDoc plugin entry point; registers options and handlers |
-| `processMermaidPage(html, options)`     | Main transformation: finds blocks, injects styles/scripts  |
-| `transformMermaidBlocks(html)`          | Regex replacement of `<pre><code class="mermaid">` blocks  |
-| `toMermaidBlock(escapedCode)`           | Creates dark/light div structure with fallback             |
-| `getScript(options)`                    | Generates the ES module script for mermaid init            |
-| `resolveMermaidDistPath()`              | Finds mermaid in node_modules for local mode               |
-| `getRelativeAssetPath(pageUrl)`         | Calculates `../` depth for nested pages                    |
-| `escapeHtml(str)` / `unescapeHtml(str)` | HTML entity handling for mermaid syntax                    |
+| Function                            | Purpose                                                    |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `load(app)`                         | TypeDoc plugin entry point; registers options and handlers |
+| `processMermaidPage(html, options)` | Main transformation: finds blocks, injects styles/scripts  |
+| `transformMermaidBlocks(html)`      | Regex replacement of `<pre><code class="mermaid">` blocks  |
+| `toMermaidBlock(escapedCode)`       | Creates single mermaid div with fallback pre block         |
+| `getScript(options)`                | Generates the ES module script for mermaid init            |
+| `resolveMermaidDistPath()`          | Finds mermaid in node_modules for local mode               |
+| `getRelativeAssetPath(pageUrl)`     | Calculates `../` depth for nested pages                    |
 
 ## Testing Patterns
 

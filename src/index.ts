@@ -137,14 +137,14 @@ const style = `
   display: none;
 }
 
-/* Hide mermaid divs until JS reveals the correct one (visibility allows rendering) */
+/* Hide mermaid divs until rendered by JS */
 .mermaid-block > .mermaid {
   visibility: hidden;
   position: absolute;
 }
 
-/* Once JS has applied inline display styles, make visible */
-.mermaid-block > .mermaid[style*="display: block"] {
+/* Show diagrams once rendered */
+.mermaid-block > .mermaid.rendered {
   visibility: visible;
   position: static;
 }
@@ -155,12 +155,23 @@ const style = `
  * The shared mermaid initialization and theme-switching logic.
  *
  * This is the common JavaScript code used by both CDN and local modes.
+ *
+ * Uses `startOnLoad: false` and `mermaid.run()` so that only one SVG per
+ * diagram exists in the DOM at a time. On theme change, each diagram is
+ * re-rendered with the appropriate mermaid theme via `mermaid.run()`. This
+ * avoids duplicate SVG marker IDs that break arrowheads in sequence, C4,
+ * journey, timeline, and state-v1 diagrams.
+ *
+ * Diagram source is stored in `data-mermaid-code` attributes. Before each
+ * render cycle, the script populates each element's `textContent` with the
+ * source prefixed by a `%%{init:{"theme":"..."}}%%` directive, clears
+ * `data-processed`, and calls `mermaid.run()`.
  */
 const mermaidInitScript = `
 document.documentElement.classList.add("mermaid-enabled");
 
 mermaid.initialize({
-  startOnLoad: true,
+  startOnLoad: false,
   flowchart: { useMaxWidth: true },
   sequence: { useMaxWidth: true },
 });
@@ -175,43 +186,35 @@ function isDarkMode() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-// Update diagram visibility based on current theme
-function updateDiagramVisibility() {
-  const dark = isDarkMode();
-  document.querySelectorAll(".mermaid-block .mermaid.dark").forEach(el => {
-    el.style.display = dark ? "block" : "none";
+// Render all diagrams with the current theme using mermaid.run()
+async function renderAllDiagrams() {
+  const theme = isDarkMode() ? "dark" : "default";
+  const directive = '%%{init:{"theme":"' + theme + '"}}%%\\n';
+  document.querySelectorAll("[data-mermaid-code]").forEach((el) => {
+    el.classList.remove("rendered");
+    el.removeAttribute("data-processed");
+    el.textContent = directive + el.dataset.mermaidCode;
   });
-  document.querySelectorAll(".mermaid-block .mermaid.light").forEach(el => {
-    el.style.display = dark ? "none" : "block";
+  await mermaid.run({ querySelector: "[data-mermaid-code]", suppressErrors: true });
+  document.querySelectorAll("[data-mermaid-code]").forEach((el) => {
+    el.classList.add("rendered");
   });
 }
 
-// Wait for mermaid to render ALL SVGs before setting initial visibility
-requestAnimationFrame(function check() {
-  const allMermaids = document.querySelectorAll("div.mermaid");
-  const rendered = document.querySelectorAll("div.mermaid svg");
-
-  if (rendered.length < allMermaids.length) {
-    // Still waiting for mermaid to render
-    requestAnimationFrame(check);
-  } else {
-    // All diagrams rendered, now apply visibility
-    updateDiagramVisibility();
-  }
-});
+renderAllDiagrams();
 
 // Watch for theme changes via attribute mutation
 const observer = new MutationObserver((mutations) => {
   for (const mutation of mutations) {
     if (mutation.attributeName === "data-theme") {
-      updateDiagramVisibility();
+      renderAllDiagrams();
     }
   }
 });
 observer.observe(document.documentElement, { attributes: true });
 
 // Also watch system preference changes
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", updateDiagramVisibility);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAllDiagrams);
 `;
 
 /**
@@ -256,54 +259,29 @@ ${mermaidInitScript}
 };
 
 /**
- * Escape HTML entities for display in fallback pre block.
+ * Convert HTML-escaped mermaid code to a renderable block.
  *
- * @param str - The string to escape
- * @returns The escaped string
- */
-export const escapeHtml = (str: string): string => {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
-/**
- * Unescape HTML entities back to plain text for mermaid to parse.
+ * Emits an empty `<div class="mermaid">` with the diagram source stored in a
+ * `data-mermaid-code` attribute. The client-side script reads this attribute,
+ * sets the element's `textContent` with a theme directive prefix, and calls
+ * `mermaid.run()`. On theme change, the process repeats with the new theme.
  *
- * TypeDoc escapes special characters in code blocks, but Mermaid needs the
- * actual characters (especially `>` for arrows like `-->` and `->>`).
- *
- * @param str - The string to unescape
- * @returns The unescaped string
- */
-export const unescapeHtml = (str: string): string => {
-  return str
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&');
-};
-
-/**
- * Convert HTML-escaped mermaid code to a block with dark/light variants.
+ * The HTML-encoded content from TypeDoc (e.g., `&lt;` for `<`) is stored
+ * directly in the attribute. The browser decodes entities when reading
+ * `el.dataset.mermaidCode`, and setting `el.textContent` re-encodes them for
+ * `mermaid.run()` to decode via its `entityDecode()` step.
  *
  * @param escapedCode - HTML-escaped mermaid code from the pre/code block
  * @returns The mermaid block HTML
  */
 export const toMermaidBlock = (escapedCode: string): string => {
-  // Unescape for mermaid to parse, then re-escape for the fallback pre
-  const plainCode = unescapeHtml(escapedCode).trim();
-  const htmlCode = escapeHtml(plainCode);
+  // Escape any unencoded double quotes for safe interpolation into the attribute
+  const code = escapedCode.trim().replaceAll('"', '&quot;');
 
-  const dark = `<div class="mermaid dark">%%{init:{"theme":"dark"}}%%\n${plainCode}</div>`;
-  const light = `<div class="mermaid light">%%{init:{"theme":"default"}}%%\n${plainCode}</div>`;
-  const pre = `<pre><code class="language-mermaid">${htmlCode}</code></pre>`;
+  const div = `<div class="mermaid" data-mermaid-code="${code}"></div>`;
+  const pre = `<pre><code class="language-mermaid">${code}</code></pre>`;
 
-  return MERMAID_BLOCK_START + dark + light + pre + MERMAID_BLOCK_END;
+  return MERMAID_BLOCK_START + div + pre + MERMAID_BLOCK_END;
 };
 
 /**
